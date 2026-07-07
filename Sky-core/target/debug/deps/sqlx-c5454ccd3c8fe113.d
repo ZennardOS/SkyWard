@@ -1,0 +1,12 @@
+/home/ozzziris/SkyWard/Sky-core/target/debug/deps/sqlx-c5454ccd3c8fe113.d: /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/mod.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/mod.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/ty_match.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/spec_error.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.md /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/test.md /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/install_drivers_note.md
+
+/home/ozzziris/SkyWard/Sky-core/target/debug/deps/libsqlx-c5454ccd3c8fe113.rmeta: /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/mod.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/mod.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/ty_match.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/spec_error.rs /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.md /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/test.md /home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/install_drivers_note.md
+
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.rs:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/mod.rs:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/mod.rs:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/ty_match.rs:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/spec_error.rs:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/lib.md:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/macros/test.md:
+/home/ozzziris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/sqlx-0.9.0/src/any/install_drivers_note.md:
