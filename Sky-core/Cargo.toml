@@ -6,3 +6,8 @@ edition = "2024"
 [dependencies]
 anyhow = "*"
 sqlx = { version = "*", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
+
+ed25519-dalek = { version = "*", features = ["rand_core"] }
+sha2 = "*"
+rand_core = "*"
+chrono = { version = "*", features = ["serde"] }
