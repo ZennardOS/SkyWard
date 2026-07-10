@@ -6,10 +6,12 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine as _; 
 use chrono::Utc; 
 
-fn get_account_id(public_key: &[u8]) -> String {
+pub fn get_account_id(public_key: &[u8]) -> String {
     let hash = Sha256::digest(public_key); 
     base64::encode(&hash[..16])
 }
+
+
 
 pub struct Account {
     pub account_id: String, 

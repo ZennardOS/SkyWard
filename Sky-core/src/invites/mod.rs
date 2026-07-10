@@ -1,5 +1,5 @@
 use anyhow::Result; 
-use ed25519_dalek::{Signature, Signer, SigningKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey, Verifier};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,22 @@ pub struct InviteToken {
     pub sign: String,
 }
 
+pub fn verify_invite_token(token: &str) -> Result<Payload> {
+    let decoded_bytes = URL_SAFE_NO_PAD.decode(token)?;
+    let invite_token: InviteToken = serde_json::from_slice(&decoded_bytes)?;
+    let payload = invite_token.payload;
+    let payload_bytes = serde_json::to_vec(&payload)?;
+    let public_key_bytes = base64::decode(&payload.public_key)?;
+    let pub_key_arr: [u8; 32] = public_key_bytes.try_into().map_err(|_| anyhow::anyhow!("public key lenght is incorrect!"))?;
+    let public_key = VerifyingKey::from_bytes(&pub_key_arr)?;
+    let sign_bytes = base64::decode(&invite_token.sign)?;
+    let sign_arr: [u8; 64] = sign_bytes.try_into().map_err(|_| anyhow::anyhow!("Lenght line is incorrect!"))?;
+    let signature = Signature::from_slice(&sign_arr)?;
+    public_key.verify(&payload_bytes, &signature)?;
+
+    Ok(payload)
+
+}
 
 pub fn token_generator(account: &Account) -> Result<String> {
     let private_key_bytes = base64::decode(&account.private_key)?;
