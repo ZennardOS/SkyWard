@@ -4,10 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "*"
-sqlx = { version = "*", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
+anyhow = "1.0"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
 
-ed25519-dalek = { version = "*", features = ["rand_core"] }
-sha2 = "*"
-rand_core = "*"
-chrono = { version = "*", features = ["serde"] }
+# Мы явно подключаем rand и разрешаем ed25519-dalek использовать совместимые структуры
+rand = "0.8" 
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.22"
+tokio = { version = "1.0", features = ["full"] }
