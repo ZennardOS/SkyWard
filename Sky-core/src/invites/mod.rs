@@ -1,9 +1,9 @@
-use anyhow::Result; 
+use anyhow::{Result, anyhow};
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey, Verifier};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use crate::identity::Account;
+use crate::identity::{Account, get_account_id};
 
 #[derive(Serialize, Deserialize)]
 pub struct Payload {
@@ -24,14 +24,29 @@ pub fn verify_invite_token(token: &str) -> Result<Payload> {
     let decoded_bytes = URL_SAFE_NO_PAD.decode(token)?;
     let invite_token: InviteToken = serde_json::from_slice(&decoded_bytes)?;
     let payload = invite_token.payload;
+
+    if payload.version != 1 {
+       return Err(anyhow!("unsupported version!"));
+    }
+
+    if payload.token_type != "multi_use" {
+
+        return Err(anyhow!("unsupported token type!"));
+    }
+
     let payload_bytes = serde_json::to_vec(&payload)?;
     let public_key_bytes = base64::decode(&payload.public_key)?;
-    let pub_key_arr: [u8; 32] = public_key_bytes.try_into().map_err(|_| anyhow::anyhow!("public key lenght is incorrect!"))?;
+    let pub_key_arr: [u8; 32] = public_key_bytes.as_slice().try_into().map_err(|_| anyhow::anyhow!("public key lenght is incorrect!"))?;
     let public_key = VerifyingKey::from_bytes(&pub_key_arr)?;
     let sign_bytes = base64::decode(&invite_token.sign)?;
     let sign_arr: [u8; 64] = sign_bytes.try_into().map_err(|_| anyhow::anyhow!("Lenght line is incorrect!"))?;
     let signature = Signature::from_slice(&sign_arr)?;
     public_key.verify(&payload_bytes, &signature)?;
+
+    let expected_id = get_account_id(&public_key_bytes);
+    if payload.account_id != expected_id {
+        return Err(anyhow!("account_id is incorrect!"));
+    }
 
     Ok(payload)
 
