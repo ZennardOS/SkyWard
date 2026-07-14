@@ -4,7 +4,7 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 use crate::identity::Account;
-use crate::invites::{Payload, verify_invite_token};
+use crate::invites::verify_invite_token;
 
 #[derive(Debug)]
 pub struct Contact {
@@ -41,7 +41,7 @@ pub async fn add_contact(
                     peer_public_key,
                     nickname,
                     trusted,
-                    created_date,
+                    created_date
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, peer_account_id) DO UPDATE SET
@@ -80,7 +80,7 @@ pub async fn add_contact(
             peer_public_key,
             nickname,
             trusted,
-            created_date,
+            created_date
         FROM contacts
         WHERE account_id = ? AND peer_account_id = ?
         "#,
@@ -122,7 +122,7 @@ pub async fn list_contacts(pool: &SqlitePool, my_account: &Account) -> Result<Ve
             peer_public_key,
             nickname,
             trusted,
-            created_date,
+            created_date
         FROM contacts
         WHERE account_id = ?
         ORDER BY trusted DESC
