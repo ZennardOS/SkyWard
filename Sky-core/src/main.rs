@@ -2,6 +2,7 @@ mod contacts;
 mod identity;
 mod invites;
 mod storage;
+mod chats;
 
 use anyhow::Result;
 
