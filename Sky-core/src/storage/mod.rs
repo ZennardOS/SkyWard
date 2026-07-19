@@ -38,7 +38,8 @@ pub async fn connect() -> Result<SqlitePool> {
     .execute(&pool)
     .await?;
 
-    sqlx::query(r#"
+    sqlx::query(
+        r#"
     CREATE TABLE IF NOT EXISTS chats (
         chat_id TEXT PRIMARY KEY,
         account_id TEXT NOT NULL,
@@ -50,7 +51,30 @@ pub async fn connect() -> Result<SqlitePool> {
         UNIQUE(account_id, peer_account_id)
     );
 "#,
-    ).execute(&pool).await?;
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS messages (
+            message_id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL,
+            account_id TEXT NOT NULL,
+            peer_account_id TEXT NOT NULL,
+
+            direction TEXT NOT NULL,
+            body TEXT NOT NULL,
+
+            delivery_state TEXT NOT NULL,
+            created_date TEXT NOT NULL,
+
+            FOREIGN KEY(chat_id) REFERENCES chats(chat_id)
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await?;
 
     Ok(pool)
 }
