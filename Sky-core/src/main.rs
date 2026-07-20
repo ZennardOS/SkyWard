@@ -27,19 +27,65 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() >= 2 {
-        let token = &args[1];
-        let contact = contacts::add_contact(&pool, &account, token, None).await?;
+        match args[1].as_str() {
+            "add" => {
+                let token = &args[2];
+                let contact = contacts::add_contact(&pool, &account, token, None).await?;
 
-        let chat = chats::get_chat(&pool, &account, &contact).await?;
+                let chat = chats::get_chat(&pool, &account, &contact).await?;
 
-        println!("\nContact added:");
-        println!("contact_id: {}", contact.contact_id);
-        println!("peer_account_id: {}", contact.peer_account_id);
-        println!("trust_state: {}", contact.trusted);
+                println!("\nContact added:");
+                println!("contact_id: {}", contact.contact_id);
+                println!("peer_account_id: {}", contact.peer_account_id);
+                println!("trust_state: {}", contact.trusted);
 
-        println!("\nChat ready:");
-        println!("chat_id: {}", chat.chat_id);
-        println!("peer_account_id: {}", chat.peer_account_id);
+                println!("\nChat ready:");
+                println!("chat_id: {}", chat.chat_id);
+                println!("peer_account_id: {}", chat.peer_account_id);
+            }
+
+            "send" => {
+                let chat_id = &args[2];
+                let plaintext = args[3..].join(" ");
+
+                let chat = chats::get_chat_by_id(&pool, &account, chat_id).await?;
+
+                let messages =
+                    messages::outgoing_message_saver(&pool, &account, &chat, &plaintext).await?;
+
+                println!("Message was saved: ");
+                println!("message id: {}", messages.message_id);
+                println!("chat id: {}", messages.chat_id);
+                println!("body: {}", messages.body);
+                println!("state: {}", messages.delivery_state);
+            }
+
+            "history" => {
+                let chat_id = &args[2];
+
+                let messages = messages::list_messages(&pool, &account, chat_id).await?;
+
+                println!("Messages: ");
+
+                if messages.is_empty() {
+                    println!("No messages yet!");
+                } else {
+                    for message in messages {
+                        println!(
+                            "[{}] {}: {} ({})",
+                            message.created_date,
+                            message.direction,
+                            message.body,
+                            message.delivery_state
+                        );
+                    }
+                }
+            }
+
+            _ => {
+                println!("Unknown...");
+            }
+        }
     }
 
     let contacts = contacts::list_contacts(&pool, &account).await?;
