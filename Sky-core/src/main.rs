@@ -1,11 +1,14 @@
 mod chats;
 mod contacts;
+mod cover;
 mod identity;
 mod invites;
 mod messages;
 mod storage;
 
 use anyhow::Result;
+
+use crate::cover::encode_cover_message;
 
 fn helper() {
     println!(
@@ -138,6 +141,29 @@ async fn main() -> Result<()> {
             println!("chat id: {}", messages.chat_id);
             println!("body: {}", messages.body);
             println!("state: {}", messages.delivery_state);
+        }
+
+        "pack" => {
+            if args.len() < 4 {
+                println!("Usage: cargo run -- send <chat_id> <message>");
+                return Ok(());
+            }
+
+            let chat_id = &args[2];
+            let plaintext = args[3..].join(" ");
+
+            let chat = chats::get_chat_by_id(&pool, &account, chat_id).await?;
+            let message =
+                messages::outgoing_message_saver(&pool, &account, &chat, &plaintext).await?;
+
+            let cover_message = cover::get_cover_message(&message);
+            let encoded = encode_cover_message(&cover_message)?;
+
+            println!("Covered: {}", encoded);
+
+            let decoded = cover::decode_cover_message(&encoded)?;
+
+            println!("decoded: {:?}", decoded);
         }
 
         "history" => {
