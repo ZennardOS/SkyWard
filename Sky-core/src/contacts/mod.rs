@@ -2,7 +2,6 @@ use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
-
 use crate::identity::Account;
 use crate::invites::verify_invite_token;
 
@@ -15,6 +14,16 @@ pub struct Contact {
     pub nickname: Option<String>,
     pub trusted: String,
     pub created_date: String,
+}
+
+pub async fn get_public_key(pool: &SqlitePool, my_account: &Account, peer_account_id: &str) -> Result<String> {
+    let public_key = sqlx::query_scalar::<_, String>(r#"
+        SELECT peer_public_key
+        FROM contacts
+        WHERE account_id = ? AND peer_account_id = ?
+"#,).bind(&my_account.account_id).bind(peer_account_id).fetch_optional(pool).await?.ok_or_else(|| anyhow!("Contact public key not found for peer: {}", peer_account_id))?;
+
+    Ok(public_key)
 }
 
 pub async fn add_contact(

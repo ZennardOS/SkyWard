@@ -157,6 +157,14 @@ async fn main() -> Result<()> {
                 messages::outgoing_message_saver(&pool, &account, &chat, &plaintext).await?;
 
             let cover_message = cover::get_cover_message(&message);
+            let signed = cover::sign_cover(&cover_message, &account)?;
+
+            println!("Signed cover: {:?}", signed);
+
+            let verified = cover::verify_signed_cover(&pool, &signed, &account).await?;
+
+            println!("Verified: {:?}", verified);
+
             let encoded = encode_cover_message(&cover_message)?;
 
             println!("Covered: {}", encoded);
