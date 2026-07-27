@@ -6,7 +6,9 @@ mod invites;
 mod messages;
 mod storage;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use ed25519_dalek::ed25519::signature;
 
 use crate::cover::encode_cover_message;
 
@@ -145,7 +147,7 @@ async fn main() -> Result<()> {
 
         "pack" => {
             if args.len() < 4 {
-                println!("Usage: cargo run -- send <chat_id> <message>");
+                println!("Usage: cargo run -- pack <chat_id> <message>");
                 return Ok(());
             }
 
@@ -159,19 +161,28 @@ async fn main() -> Result<()> {
             let cover_message = cover::get_cover_message(&message);
             let signed = cover::sign_cover(&cover_message, &account)?;
 
-            println!("Signed cover: {:?}", signed);
+            let encoded = cover::encode_signed_cover_message(&signed)?;
+
+            println!("Packed: {}", encoded);
+        }
+        "unpack" => {
+            if args.len() < 3 {
+                println!("Usage: cargo run -- unpack <packed_message>");
+                return Ok(());
+            }
+
+            let encoded = &args[2];
+            let signed = cover::decode_signed_cover_message(encoded)?;
 
             let verified = cover::verify_signed_cover(&pool, &signed, &account).await?;
-
             println!("Verified: {:?}", verified);
 
-            let encoded = encode_cover_message(&cover_message)?;
-
-            println!("Covered: {}", encoded);
-
-            let decoded = cover::decode_cover_message(&encoded)?;
-
-            println!("decoded: {:?}", decoded);
+            let message = messages::incoming_message_saver(&pool, &account, &verified).await?;
+            println!("Incoming message: ");
+            println!("message_id: {}", message.message_id);
+            println!("chat_id: {}", message.chat_id);
+            println!("from: {}", message.account_id);
+            println!("body: {}", message.body);
         }
 
         "history" => {

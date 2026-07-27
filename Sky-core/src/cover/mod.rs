@@ -1,12 +1,12 @@
+use crate::contacts::get_public_key;
+use crate::identity::{Account, get_account_id};
+use crate::messages::Message;
 use anyhow::{Result, anyhow};
 use base64::engine::general_purpose::STANDARD;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use crate::contacts::get_public_key;
-use crate::identity::{Account, get_account_id};
-use crate::messages::Message;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoverMessage {
@@ -42,13 +42,22 @@ pub fn sign_cover(cover_message: &CoverMessage, account: &Account) -> Result<Sig
     })
 }
 
-pub async fn verify_signed_cover(pool: &SqlitePool, signed_cover: &SignedCoverMessage, my_account: &Account) -> Result<CoverMessage> {
+pub async fn verify_signed_cover(
+    pool: &SqlitePool,
+    signed_cover: &SignedCoverMessage,
+    my_account: &Account,
+) -> Result<CoverMessage> {
     let decoded_signed_cover_message = decode_cover_message(&signed_cover.cover)?;
     if decoded_signed_cover_message.receiver_account_id != my_account.account_id {
         return Err(anyhow!("message is addressed to another account!"));
     }
 
-    let saved_public_key = get_public_key(pool, my_account, &decoded_signed_cover_message.sender_account_id).await?;
+    let saved_public_key = get_public_key(
+        pool,
+        my_account,
+        &decoded_signed_cover_message.sender_account_id,
+    )
+    .await?;
     let public_key_bytes = STANDARD.decode(&saved_public_key)?;
     let expected_sender_id = get_account_id(&public_key_bytes);
 
@@ -56,19 +65,24 @@ pub async fn verify_signed_cover(pool: &SqlitePool, signed_cover: &SignedCoverMe
         return Err(anyhow!("sender id doesn't match with expected id"));
     }
 
-    let public_key_arr: [u8; 32] = public_key_bytes.try_into().map_err(|_| anyhow!("public key lenght is incorrect!"))?;
+    let public_key_arr: [u8; 32] = public_key_bytes
+        .try_into()
+        .map_err(|_| anyhow!("public key lenght is incorrect!"))?;
 
     let public_key = VerifyingKey::from_bytes(&public_key_arr)?;
 
     let sign_bytes = STANDARD.decode(&signed_cover.sign)?;
-    let sign_arr: [u8; 64] = sign_bytes.try_into().map_err(|_| anyhow!("signature lenght is incorrect"))?;
+    let sign_arr: [u8; 64] = sign_bytes
+        .try_into()
+        .map_err(|_| anyhow!("signature lenght is incorrect"))?;
 
     let signature = Signature::from_bytes(&sign_arr);
 
-    public_key.verify(signed_cover.cover.as_bytes(), &signature).map_err(|err| anyhow!("signature verification is failed: {err}"))?;
+    public_key
+        .verify(signed_cover.cover.as_bytes(), &signature)
+        .map_err(|err| anyhow!("signature verification is failed: {err}"))?;
 
     Ok(decoded_signed_cover_message)
-    
 }
 
 pub fn encode_cover_message(cover_message: &CoverMessage) -> Result<String> {
@@ -77,6 +91,17 @@ pub fn encode_cover_message(cover_message: &CoverMessage) -> Result<String> {
 }
 
 pub fn decode_cover_message(encoded: &str) -> Result<CoverMessage> {
+    let bytes = URL_SAFE_NO_PAD.decode(encoded)?;
+    let payload = serde_json::from_slice(&bytes)?;
+    Ok(payload)
+}
+
+pub fn encode_signed_cover_message(signed_cover_message: &SignedCoverMessage) -> Result<String> {
+    let bytes = serde_json::to_vec(signed_cover_message)?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+pub fn decode_signed_cover_message(encoded: &str) -> Result<SignedCoverMessage> {
     let bytes = URL_SAFE_NO_PAD.decode(encoded)?;
     let payload = serde_json::from_slice(&bytes)?;
     Ok(payload)
