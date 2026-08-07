@@ -20,6 +20,7 @@ pub struct CoverMessage {
     pub body: String,
 }
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedCoverMessage {
     pub cover: String,

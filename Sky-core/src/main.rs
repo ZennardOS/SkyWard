@@ -5,6 +5,7 @@ mod identity;
 mod invites;
 mod messages;
 mod storage;
+mod confirm;
 
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD};
