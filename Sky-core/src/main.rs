@@ -1,15 +1,16 @@
 mod chats;
+mod confirm;
 mod contacts;
 mod cover;
 mod identity;
 mod invites;
 mod messages;
 mod storage;
-mod confirm;
 
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ed25519_dalek::ed25519::signature;
+use sqlx::encode;
 
 use crate::cover::encode_cover_message;
 
@@ -185,7 +186,32 @@ async fn main() -> Result<()> {
             println!("from: {}", message.account_id);
             println!("body: {}", message.body);
         }
-
+        "make-confirm" => {
+            if args.len() < 3 {
+                println!("Usage: cargo run -- make-confirm <message_id>");
+                return Ok(());
+            }
+            let message_id = &args[2];
+            let message =
+                messages::get_incoming_messages_by_id(&pool, &account, message_id).await?;
+            let delivery = confirm::get_deliver_confirm(&message, &account);
+            let signed = confirm::sign_delivery_confirm(&delivery, &account)?;
+            let encoded = confirm::encode_signed_delivery_confirm(&signed)?;
+            println!("confirmed: {}", encoded);
+        }
+        "apply-confirm" => {
+            if args.len() < 3 {
+                println!("Usage: cargo run -- apply-confirm <encoded_confirm>");
+                return Ok(());
+            }
+            let encoded = &args[2];
+            let signed = confirm::decode_signed_delivery_confirm(encoded)?;
+            let verified =
+                confirm::verify_signed_delivery_confirm(&pool, &signed, &account).await?;
+            println!("verified: {:?}", verified);
+            let messages = confirm::apply_delivery_confirm(&pool, &account, &verified).await?;
+            println!("messages: {:?}", messages);
+        }
         "history" => {
             if args.len() < 3 {
                 println!("Usage: cargo run -- history <chat_id>");

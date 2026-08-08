@@ -19,6 +19,57 @@ pub struct Message {
     pub created_date: String,
 }
 
+pub async fn get_incoming_messages_by_id(
+    pool: &SqlitePool,
+    account: &Account,
+    message_id: &str,
+) -> Result<Message> {
+    let line = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+        ),
+    >(
+        r#"
+            SELECT
+                message_id,
+                chat_id,
+                account_id,
+                peer_account_id,
+                direction,
+                body,
+                delivery_state,
+                created_date
+            FROM
+                messages
+            WHERE
+                account_id = ? AND message_id = ? AND direction = 'incoming'
+        "#,
+    )
+    .bind(&account.account_id)
+    .bind(message_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(Message {
+        message_id: line.0,
+        chat_id: line.1,
+        account_id: line.2,
+        peer_account_id: line.3,
+        direction: line.4,
+        body: line.5,
+        delivery_state: line.6,
+        created_date: line.7,
+    })
+}
+
 pub async fn incoming_message_saver(
     pool: &SqlitePool,
     account: &Account,
