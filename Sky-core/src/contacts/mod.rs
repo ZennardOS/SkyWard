@@ -1,9 +1,10 @@
+use crate::identity::Account;
+use crate::invites::verify_invite_token;
 use anyhow::{Result, anyhow};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
-use crate::identity::Account;
-use crate::invites::verify_invite_token;
 
 #[derive(Debug)]
 pub struct Contact {
@@ -11,17 +12,55 @@ pub struct Contact {
     pub account_id: String,
     pub peer_account_id: String,
     pub peer_public_key: String,
+    pub peer_encryption_public_key: String,
     pub nickname: Option<String>,
     pub trusted: String,
     pub created_date: String,
 }
 
-pub async fn get_public_key(pool: &SqlitePool, my_account: &Account, peer_account_id: &str) -> Result<String> {
-    let public_key = sqlx::query_scalar::<_, String>(r#"
+pub async fn get_public_key(
+    pool: &SqlitePool,
+    my_account: &Account,
+    peer_account_id: &str,
+) -> Result<String> {
+    let public_key = sqlx::query_scalar::<_, String>(
+        r#"
         SELECT peer_public_key
         FROM contacts
         WHERE account_id = ? AND peer_account_id = ?
-"#,).bind(&my_account.account_id).bind(peer_account_id).fetch_optional(pool).await?.ok_or_else(|| anyhow!("Contact public key not found for peer: {}", peer_account_id))?;
+"#,
+    )
+    .bind(&my_account.account_id)
+    .bind(peer_account_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| anyhow!("Contact public key not found for peer: {}", peer_account_id))?;
+
+    Ok(public_key)
+}
+
+pub async fn get_peer_encryption_public_key(
+    pool: &SqlitePool,
+    my_account: &Account,
+    peer_account_id: &str,
+) -> Result<String> {
+    let public_key = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT peer_encryption_public_key
+        FROM contacts
+        WHERE account_id = ? AND peer_account_id = ?
+"#,
+    )
+    .bind(&my_account.account_id)
+    .bind(peer_account_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| {
+        anyhow!(
+            "Contact encryption public key not found for peer: {}",
+            peer_account_id
+        )
+    })?;
 
     Ok(public_key)
 }
@@ -48,13 +87,15 @@ pub async fn add_contact(
                     account_id,
                     peer_account_id,
                     peer_public_key,
+                    peer_encryption_public_key,
                     nickname,
                     trusted,
                     created_date
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(account_id, peer_account_id) DO UPDATE SET
                     peer_public_key = excluded.peer_public_key,
+                    peer_encryption_public_key = excluded.peer_encryption_public_key,
                     nickname = COALESCE(excluded.nickname, contacts.nickname),
                     trusted = excluded.trusted
         "#,
@@ -63,6 +104,7 @@ pub async fn add_contact(
     .bind(&my_account.account_id)
     .bind(&payload.account_id)
     .bind(&payload.public_key)
+    .bind(&payload.encryption_public_key)
     .bind(&nickname)
     .bind(&trusted)
     .bind(&created_date)
@@ -72,6 +114,7 @@ pub async fn add_contact(
     let line = sqlx::query_as::<
         _,
         (
+            String,
             String,
             String,
             String,
@@ -87,6 +130,7 @@ pub async fn add_contact(
             account_id,
             peer_account_id,
             peer_public_key,
+            peer_encryption_public_key,
             nickname,
             trusted,
             created_date
@@ -104,9 +148,10 @@ pub async fn add_contact(
         account_id: line.1,
         peer_account_id: line.2,
         peer_public_key: line.3,
-        nickname: line.4,
-        trusted: line.5,
-        created_date: line.6,
+        peer_encryption_public_key: line.4,
+        nickname: line.5,
+        trusted: line.6,
+        created_date: line.7,
     });
 }
 
@@ -114,6 +159,7 @@ pub async fn list_contacts(pool: &SqlitePool, my_account: &Account) -> Result<Ve
     let lines = sqlx::query_as::<
         _,
         (
+            String,
             String,
             String,
             String,
@@ -129,6 +175,7 @@ pub async fn list_contacts(pool: &SqlitePool, my_account: &Account) -> Result<Ve
             account_id,
             peer_account_id,
             peer_public_key,
+            peer_encryption_public_key,
             nickname,
             trusted,
             created_date
@@ -148,9 +195,10 @@ pub async fn list_contacts(pool: &SqlitePool, my_account: &Account) -> Result<Ve
             account_id: line.1,
             peer_account_id: line.2,
             peer_public_key: line.3,
-            nickname: line.4,
-            trusted: line.5,
-            created_date: line.6,
+            peer_encryption_public_key: line.4,
+            nickname: line.5,
+            trusted: line.6,
+            created_date: line.7,
         })
         .collect();
 

@@ -4,6 +4,13 @@ use crate::messages::Message;
 use anyhow::{Result, anyhow};
 use base64::engine::general_purpose::STANDARD;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use chacha20poly1305::XChaCha20Poly1305;
+use chacha20poly1305::{Key, XNonce};
+
+use chacha20poly1305::aead::{Aead, AeadCore, KeyInit};
+
+use rand::rngs::OsRng;
+
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -20,11 +27,39 @@ pub struct CoverMessage {
     pub body: String,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedCoverMessage {
     pub cover: String,
     pub sign: String,
+}
+
+pub fn encrypt_message(key: &[u8; 32], plaintext: &str) -> Result<String> {
+    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+    let ciphertext = cipher
+        .encrypt(&nonce, plaintext.as_bytes())
+        .map_err(|e| anyhow::anyhow!("encryption failed: {}", e))?;
+    let mut packed = nonce.to_vec();
+    packed.extend_from_slice(&ciphertext);
+
+    Ok(STANDARD.encode(packed))
+}
+
+pub fn decrypt_message(key: &[u8; 32], encrypted: &str) -> Result<String> {
+    let packed = STANDARD.decode(encrypted)?;
+    if packed.len() < 40 {
+        return Err(anyhow!("message length is incorrect!"));
+    }
+
+    let (nonce_bytes, ciphertext) = packed.split_at(24);
+    let nonce = XNonce::from_slice(nonce_bytes);
+
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key));
+
+    let decrypted = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|e| anyhow!("decryption failed: {}", e))?;
+    Ok(String::from_utf8(decrypted)?)
 }
 
 pub fn sign_cover(cover_message: &CoverMessage, account: &Account) -> Result<SignedCoverMessage> {

@@ -13,7 +13,9 @@ pub async fn connect() -> Result<SqlitePool> {
             account_id TEXT PRIMARY KEY,
             public_key TEXT NOT NULL,
             private_key TEXT NOT NULL,
-            created_date TEXT NOT NULL
+            created_date TEXT NOT NULL,
+            encryption_public_key TEXT NOT NULL,
+            encryption_private_key TEXT NOT NULL
         );
     "#,
     )
@@ -27,6 +29,7 @@ pub async fn connect() -> Result<SqlitePool> {
         account_id TEXT NOT NULL,
         peer_account_id TEXT NOT NULL,
         peer_public_key TEXT NOT NULL,
+        peer_encryption_public_key TEXT NOT NULL,
         nickname TEXT,
         trusted TEXT NOT NULL,
         created_date TEXT NOT NULL,

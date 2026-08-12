@@ -58,6 +58,7 @@ async fn main() -> Result<()> {
         "me" => {
             println!("Account id: {}", account.account_id);
             println!("Public key: {}", account.public_key);
+            println!("Encryption public key: {}", account.encryption_public_key);
         }
         "token" => {
             let token = invites::token_generator(&account)?;
@@ -127,6 +128,18 @@ async fn main() -> Result<()> {
                 }
             }
         }
+        "general" => {
+            if args.len() < 3 {
+                println!("Usage: cargo run -- general <peer_account_id>");
+                return Ok(());
+            }
+            let peer_account_id = &args[2];
+
+            let shared = identity::get_secret(&pool, &account, peer_account_id).await?;
+            println!("General: {}", STANDARD.encode(shared));
+            let secret = identity::get_message_key(&shared)?;
+            println!("Secret: {}", STANDARD.encode(secret));
+        }
         "send" => {
             if args.len() < 4 {
                 println!("Usage: cargo run -- send <chat_id> <message>");
@@ -160,7 +173,14 @@ async fn main() -> Result<()> {
             let message =
                 messages::outgoing_message_saver(&pool, &account, &chat, &plaintext).await?;
 
-            let cover_message = cover::get_cover_message(&message);
+            let shared = identity::get_secret(&pool, &account, &message.peer_account_id).await?;
+
+            let key = identity::get_message_key(&shared)?;
+
+            let encrypted_body = cover::encrypt_message(&key, &message.body)?;
+
+            let mut cover_message = cover::get_cover_message(&message);
+            cover_message.body = encrypted_body;
             let signed = cover::sign_cover(&cover_message, &account)?;
 
             let encoded = cover::encode_signed_cover_message(&signed)?;
@@ -176,14 +196,18 @@ async fn main() -> Result<()> {
             let encoded = &args[2];
             let signed = cover::decode_signed_cover_message(encoded)?;
 
-            let verified = cover::verify_signed_cover(&pool, &signed, &account).await?;
+            let mut verified = cover::verify_signed_cover(&pool, &signed, &account).await?;
             println!("Verified: {:?}", verified);
+            let shared = identity::get_secret(&pool, &account, &verified.sender_account_id).await?;
+            let key = identity::get_message_key(&shared)?;
+            let plaintext = cover::decrypt_message(&key, &verified.body)?;
+            verified.body = plaintext;
 
             let message = messages::incoming_message_saver(&pool, &account, &verified).await?;
             println!("Incoming message: ");
             println!("message_id: {}", message.message_id);
             println!("chat_id: {}", message.chat_id);
-            println!("from: {}", message.account_id);
+            println!("from: {}", message.peer_account_id);
             println!("body: {}", message.body);
         }
         "make-confirm" => {

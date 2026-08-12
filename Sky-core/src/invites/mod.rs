@@ -13,6 +13,7 @@ pub struct Payload {
     pub version: u8,
     pub account_id: String,
     pub public_key: String,
+    pub encryption_public_key: String,
     pub created_date: String,
     pub token_type: String,
 }
@@ -77,6 +78,7 @@ pub fn token_generator(account: &Account) -> Result<String> {
         version: 1,
         account_id: account.account_id.clone(),
         public_key: account.public_key.clone(),
+        encryption_public_key: account.encryption_public_key.clone(),
         created_date: Utc::now().to_rfc3339(),
         token_type: "multi_use".to_string(),
     };
