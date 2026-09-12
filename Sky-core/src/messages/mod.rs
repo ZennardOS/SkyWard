@@ -160,7 +160,7 @@ pub async fn incoming_message_saver(
     )
     .bind(&cover_message.created_date)
     .bind(&account.account_id)
-    .bind(&chat.chat_id)
+    .bind(&cover_message.chat_id)
     .execute(pool)
     .await?;
 

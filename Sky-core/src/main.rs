@@ -6,13 +6,15 @@ mod identity;
 mod invites;
 mod messages;
 mod storage;
+mod transport;
 
 use anyhow::{Result, anyhow};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use ed25519_dalek::ed25519::signature;
 use sqlx::encode;
+use uuid::Uuid;
 
-use crate::cover::encode_cover_message;
+use crate::{cover::encode_cover_message, transport::TransportPacket};
 
 fn helper() {
     println!(
@@ -185,6 +187,17 @@ async fn main() -> Result<()> {
 
             let encoded = cover::encode_signed_cover_message(&signed)?;
 
+            let packet = TransportPacket {
+                version: 1,
+                packet_id: Uuid::new_v4().to_string(),
+                receiver_account_id: message.peer_account_id.clone(),
+                packet_type: "message".to_string(),
+                payload: encoded.clone(),
+            };
+
+            let packet_encoded = transport::encode_transport_packet(&packet)?;
+            println!("Packet: {}", packet_encoded);
+
             println!("Packed: {}", encoded);
         }
         "unpack" => {
@@ -221,7 +234,29 @@ async fn main() -> Result<()> {
             let delivery = confirm::get_deliver_confirm(&message, &account);
             let signed = confirm::sign_delivery_confirm(&delivery, &account)?;
             let encoded = confirm::encode_signed_delivery_confirm(&signed)?;
+
+            let packet = TransportPacket {
+                version: 1,
+                packet_id: Uuid::new_v4().to_string(),
+                receiver_account_id: delivery.receiver_account_id.clone(),
+                packet_type: "DeliveryMessage".to_string(),
+                payload: encoded.clone(),
+            };
+
+            let packet_encoded = transport::encode_transport_packet(&packet)?;
+            println!("Packet: {}", packet_encoded);
+
             println!("confirmed: {}", encoded);
+        }
+        "transport" => {
+            if args.len() < 3 {
+                println!("Usage: cargo run -- transport <packet>");
+                return Ok(());
+            }
+            let encoded = &args[2];
+            let packet = transport::decode_transport_packet(encoded)?;
+
+            transport::transporting_packet(&pool, &account, &packet).await?;
         }
         "apply-confirm" => {
             if args.len() < 3 {
