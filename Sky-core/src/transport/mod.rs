@@ -44,7 +44,7 @@ pub async fn transporting_packet(
             verified.body = plaintext;
             let message = messages::incoming_message_saver(pool, account, &verified).await?;
 
-            println!("Incoming message:");
+            println!("Type: Incoming message");
             println!("message_id: {}", message.message_id);
             println!("from: {}", message.peer_account_id);
             println!("body: {}", message.body);
@@ -56,7 +56,7 @@ pub async fn transporting_packet(
             let verified = confirm::verify_signed_delivery_confirm(pool, &signed, account).await?;
             let delivery_message =
                 confirm::apply_delivery_confirm(pool, account, &verified).await?;
-            println!("Delivery message:");
+            println!("Type Delivery message");
             println!("message_id: {}", delivery_message.message_id);
             Ok(())
         }
