@@ -64,3 +64,32 @@ pub async fn transporting_packet(
         _ => return Err(anyhow!("unknown packet type")),
     }
 }
+
+pub async fn send_packet(packet: &TransportPacket) -> Result<()> {
+    let client = reqwest::Client::new();
+    let response = client.post("http://localhost:8080/packets").json(packet).send().await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("responce status is not success {}", response.status()));
+    }
+
+    Ok(())
+
+
+}
+
+pub async fn fetch_packet(account_id: &str) -> Result<Vec<TransportPacket>> {
+    let client = reqwest::Client::new();
+
+    let response: reqwest::Response = client.get("http://localhost:8080/packets").query(&[("account_id", account_id)]).send().await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("relay returned status: {}", response.status()));
+    }
+
+    let packets = response.json::<Vec<TransportPacket>>().await?;
+
+    Ok(packets)
+
+
+}

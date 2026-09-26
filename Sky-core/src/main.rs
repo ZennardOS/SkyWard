@@ -195,8 +195,11 @@ async fn main() -> Result<()> {
                 payload: encoded.clone(),
             };
 
-            let packet_encoded = transport::encode_transport_packet(&packet)?;
-            println!("Packet: {}", packet_encoded);
+           // let packet_encoded = transport::encode_transport_packet(&packet)?;
+            transport::send_packet(&packet).await?;
+            println!("Packet was sended to Sky-relay!");
+
+            println!("Packet_id: {}", packet.packet_id);
 
             println!("Packed: {}", encoded);
         }
@@ -257,6 +260,16 @@ async fn main() -> Result<()> {
             let packet = transport::decode_transport_packet(encoded)?;
 
             transport::transporting_packet(&pool, &account, &packet).await?;
+        }
+        "fetch" => {
+            let packets = transport::fetch_packet(&account.account_id).await?;
+
+            println!("packets received: {}", packets.len());
+
+            for packet in packets {
+                transport::transporting_packet(&pool, &account, &packet).await?;
+            }
+
         }
         "apply-confirm" => {
             if args.len() < 3 {
