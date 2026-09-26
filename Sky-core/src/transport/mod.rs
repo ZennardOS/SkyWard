@@ -93,3 +93,17 @@ pub async fn fetch_packet(account_id: &str) -> Result<Vec<TransportPacket>> {
 
 
 }
+
+pub async fn ack_packet(account_id: &str, packet_id: &str) -> Result<()> {
+    let client = reqwest::Client::new();
+
+    let url = format!("http://localhost:8080/packets/{}", packet_id);
+
+    let response = client.delete(url).query(&[("account_id", account_id)]).send().await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("relay returned status: {}", response.status()));
+    }
+
+    Ok(())
+}

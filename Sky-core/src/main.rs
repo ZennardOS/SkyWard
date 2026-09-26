@@ -267,7 +267,18 @@ async fn main() -> Result<()> {
             println!("packets received: {}", packets.len());
 
             for packet in packets {
-                transport::transporting_packet(&pool, &account, &packet).await?;
+                let packet_id = packet.packet_id.clone();
+
+                match transport::transporting_packet(&pool, &account, &packet).await {
+                    Ok(()) => {
+                        transport::ack_packet(&account.account_id, &packet_id).await?;
+                        println!("ACK for packet: {}", packet_id);
+                    }
+
+                    Err(error) => {
+                        eprintln!("Packet {} failed with: {}", packet_id, error);
+                    }
+                }
             }
 
         }
