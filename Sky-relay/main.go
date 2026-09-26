@@ -49,7 +49,7 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	packetID := strings.TrimPrefix(r.URL.Path, "/packets/")
-	accountID := r.URL.Query().Get("account_id");
+	accountID := r.URL.Query().Get("account_id")
 
 	if packetID == "" || accountID == "" {
 		http.Error(w, "packet_id and account_id is reqired", http.StatusBadRequest)
@@ -123,7 +123,10 @@ func handleGetPackets(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mutex.Lock()
+
 	packet := packets[accountID]
+
+	mutex.Unlock()
 	if packet == nil {
 		packet = []TransportPacket{}
 	}
