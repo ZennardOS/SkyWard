@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -22,7 +23,7 @@ var (
 
 func main() {
 	http.HandleFunc("/packets", packetsHandler)
-
+	http.HandleFunc("/packets/", packetHandler)
 	log.Println("Sky relay listening on :8080")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
@@ -39,6 +40,52 @@ func packetsHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func packetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	packetID := strings.TrimPrefix(r.URL.Path, "/packets/")
+	accountID := r.URL.Query().Get("account_id");
+
+	if packetID == "" || accountID == "" {
+		http.Error(w, "packet_id and account_id is reqired", http.StatusBadRequest)
+		return
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	queue := packets[accountID]
+
+	filtered := make([]TransportPacket, 0, len(queue))
+
+	found := false
+
+	for _, packet := range queue {
+		if packet.PacketID == packetID {
+			found = true
+			continue
+		}
+
+		filtered = append(filtered, packet)
+	}
+
+	if !found {
+		http.Error(w, "not found correct packets", http.StatusNotFound)
+		return
+	}
+
+	if len(filtered) == 0 {
+		delete(packets, accountID)
+	} else {
+		packets[packetID] = filtered
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func handlePostPacket(w http.ResponseWriter, r *http.Request) {
