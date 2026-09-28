@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
                 payload: encoded.clone(),
             };
 
-           // let packet_encoded = transport::encode_transport_packet(&packet)?;
+            // let packet_encoded = transport::encode_transport_packet(&packet)?;
             transport::send_packet(&packet).await?;
             println!("Packet was sended to Sky-relay!");
 
@@ -280,7 +280,6 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-
         }
         "apply-confirm" => {
             if args.len() < 3 {

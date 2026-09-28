@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Ok, Result, anyhow};
 use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -120,10 +120,61 @@ pub async fn incoming_message_saver(
     .await?;
 
     if already_exists {
-        return Err(anyhow!(
-            "message already exists: {}",
-            cover_message.message_id
-        ));
+        // return Err(anyhow!(
+        //     "message already exists: {}",
+        //     cover_message.message_id
+        // ));
+        let existing = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+            ),
+        >(
+            r#"
+            SELECT
+            message_id,
+            chat_id,
+            account_id,
+            peer_account_id,
+            direction,
+            body,
+            delivery_state,
+            created_date
+            FROM messages
+            WHERE message_id = ? AND account_id = ?
+            "#,
+        )
+        .bind(&cover_message.message_id)
+        .bind(&account.account_id)
+        .fetch_one(pool)
+        .await?;
+
+        let message = Message {
+            message_id: existing.0,
+            chat_id: existing.1,
+            account_id: existing.2,
+            peer_account_id: existing.3,
+            direction: existing.4,
+            body: existing.5,
+            delivery_state: existing.6,
+            created_date: existing.7,
+        };
+
+        if message.peer_account_id != cover_message.sender_account_id {
+            return Err(anyhow!("message_id doesn't match with sender!"));
+        }
+        if message.body != cover_message.body {
+            return Err(anyhow!("duplicate message has diff body!"));
+        }
+
+        return Ok(message);
     }
 
     sqlx::query(
