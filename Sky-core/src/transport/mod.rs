@@ -5,6 +5,7 @@ use crate::messages;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransportPacket {
@@ -34,6 +35,7 @@ pub async fn transporting_packet(
     if packet.version != 1 {
         return Err(anyhow!("unsupported transport version: {}", packet.version));
     }
+
     match packet.packet_type.as_str() {
         "message" => {
             let signed = cover::decode_signed_cover_message(&packet.payload)?;
@@ -49,6 +51,25 @@ pub async fn transporting_packet(
             println!("from: {}", message.peer_account_id);
             println!("body: {}", message.body);
 
+            let delivery = confirm::get_deliver_confirm(&message, account);
+            let signed_delivery = confirm::sign_delivery_confirm(&delivery, account)?;
+            let encoded_delivery = confirm::encode_signed_delivery_confirm(&signed_delivery)?;
+
+            let delivery_packet = TransportPacket {
+                version: 1,
+                packet_id: Uuid::new_v4().to_string(),
+                receiver_account_id: message.peer_account_id.clone(),
+                packet_type: "DeliveryMessage".to_string(),
+                payload: encoded_delivery,
+            };
+
+            send_packet(&delivery_packet).await?;
+
+            println!(
+                "Delivery confirm was sended message with id: {}",
+                delivery_packet.packet_id
+            );
+
             Ok(())
         }
         "DeliveryMessage" => {
@@ -56,7 +77,7 @@ pub async fn transporting_packet(
             let verified = confirm::verify_signed_delivery_confirm(pool, &signed, account).await?;
             let delivery_message =
                 confirm::apply_delivery_confirm(pool, account, &verified).await?;
-            println!("Type Delivery message");
+            println!("Type: Delivery message");
             println!("message_id: {}", delivery_message.message_id);
             Ok(())
         }
@@ -67,21 +88,30 @@ pub async fn transporting_packet(
 
 pub async fn send_packet(packet: &TransportPacket) -> Result<()> {
     let client = reqwest::Client::new();
-    let response = client.post("http://localhost:8080/packets").json(packet).send().await?;
+    let response = client
+        .post("http://localhost:8080/packets")
+        .json(packet)
+        .send()
+        .await?;
 
     if !response.status().is_success() {
-        return Err(anyhow!("responce status is not success {}", response.status()));
+        return Err(anyhow!(
+            "responce status is not success {}",
+            response.status()
+        ));
     }
 
     Ok(())
-
-
 }
 
 pub async fn fetch_packet(account_id: &str) -> Result<Vec<TransportPacket>> {
     let client = reqwest::Client::new();
 
-    let response: reqwest::Response = client.get("http://localhost:8080/packets").query(&[("account_id", account_id)]).send().await?;
+    let response: reqwest::Response = client
+        .get("http://localhost:8080/packets")
+        .query(&[("account_id", account_id)])
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         return Err(anyhow!("relay returned status: {}", response.status()));
@@ -90,8 +120,6 @@ pub async fn fetch_packet(account_id: &str) -> Result<Vec<TransportPacket>> {
     let packets = response.json::<Vec<TransportPacket>>().await?;
 
     Ok(packets)
-
-
 }
 
 pub async fn ack_packet(account_id: &str, packet_id: &str) -> Result<()> {
@@ -99,7 +127,11 @@ pub async fn ack_packet(account_id: &str, packet_id: &str) -> Result<()> {
 
     let url = format!("http://localhost:8080/packets/{}", packet_id);
 
-    let response = client.delete(url).query(&[("account_id", account_id)]).send().await?;
+    let response = client
+        .delete(url)
+        .query(&[("account_id", account_id)])
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         return Err(anyhow!("relay returned status: {}", response.status()));
