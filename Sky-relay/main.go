@@ -1,12 +1,23 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
+
+type Auth struct {
+	AccountID string
+	Expires time.Time
+}
 
 type TransportPacket struct {
 	Version           uint8  `json:"version"`
@@ -19,11 +30,13 @@ type TransportPacket struct {
 var (
 	mutex   sync.Mutex
 	packets = make(map[string][]TransportPacket)
+	identy = make(map[string]Auth)
 )
 
 func main() {
 	http.HandleFunc("/packets", packetsHandler)
 	http.HandleFunc("/packets/", packetHandler)
+	http.HandleFunc("/auth/verification", HandlerAuth)
 	log.Println("Sky relay listening on :8080")
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
@@ -40,6 +53,97 @@ func packetsHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func HandlerAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	accountID := r.URL.Query().Get("account_id")
+	if accountID == "" {
+		http.Error(w, "account_id is required", http.StatusBadRequest)
+		return
+	}
+
+	randomBytes := make([]byte, 32)
+
+	if _, err := rand.Read(randomBytes); err != nil {
+		http.Error(w, "failed to generate random number", http.StatusInternalServerError)
+		return
+	}
+
+	numb := base64.StdEncoding.EncodeToString(randomBytes)
+	mutex.Lock()
+
+	identy[numb] = Auth{
+		AccountID: accountID,
+		Expires: time.Now().Add(30 * time.Second),
+	}
+
+	mutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	json.NewEncoder(w).Encode(map[string]string {
+		"Number" : numb,
+	})
+
+}
+
+func authorize(accountID string, publicKey string, number string, signature string) error {
+	mutex.Lock()
+	auth, exists := identy[number]
+	if exists {
+		delete(identy, number)
+	}
+	mutex.Unlock()
+
+	if !exists {
+		return fmt.Errorf("number not found!")
+	}
+
+	if time.Now().After(auth.Expires) {
+		return fmt.Errorf("auth expired!")
+	}
+
+	if auth.AccountID != accountID {
+		return  fmt.Errorf("Account id doesn't match!")
+	}
+
+	publicKeyBytes, err := base64.StdEncoding.DecodeString(publicKey)
+
+	if err != nil {
+		return fmt.Errorf("invalid public key: %w", err)
+	}
+
+	if len(publicKeyBytes) != ed25519.PublicKeySize {
+		return fmt.Errorf("Public key has wrong size!")
+	}
+
+	hash := sha256.Sum256(publicKeyBytes)
+	expectedID := base64.StdEncoding.EncodeToString(hash[:16])
+
+	if expectedID != accountID {
+		return fmt.Errorf("Public key has wrong account id!")
+	}
+
+	signBytes, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("invalid signature: %w", err)
+	}
+
+	if len(signBytes) != ed25519.SignatureSize {
+		return fmt.Errorf("Signature has wrong size!")
+	}
+
+	if !ed25519.Verify(ed25519.PublicKey(publicKeyBytes), []byte(number), signBytes) {
+		return fmt.Errorf("invalid signature!")
+	}
+
+	return nil
+
 }
 
 func packetHandler(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +220,16 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 
 func handleGetPackets(w http.ResponseWriter, r *http.Request) {
 	accountID := r.URL.Query().Get("account_id")
+
+	publicKey := r.Header.Get("X-Public-Key")
+	numb := r.Header.Get("X-Number")
+	sign := r.Header.Get("X-Signature")
+
+	if err := authorize(accountID, publicKey, numb, sign); err != nil {
+		log.Println("auth is failed: ", err)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	if accountID == "" {
 		http.Error(w, "account_id required", http.StatusBadRequest)
