@@ -86,13 +86,19 @@ func HandlerAuth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(map[string]string {
-		"Number" : numb,
-	})
+	//json.NewEncoder(w).Encode(map[string]string {
+	//	"Number" : numb,
+	//	})
+	jsonbytes, err := json.Marshal(map[string]string{"number": numb})
+	if err != nil {
+		http.Error(w, "failed to marshal json", http.StatusInternalServerError)
+		return
+	}
+	w.Write(jsonbytes)
 
 }
 
-func authorize(accountID string, publicKey string, number string, signature string) error {
+func authorize(accountID string, publicKey string, number string, signature string, r *http.Request) error {
 	mutex.Lock()
 	auth, exists := identy[number]
 	if exists {
@@ -134,11 +140,9 @@ func authorize(accountID string, publicKey string, number string, signature stri
 		return fmt.Errorf("invalid signature: %w", err)
 	}
 
-	if len(signBytes) != ed25519.SignatureSize {
-		return fmt.Errorf("Signature has wrong size!")
-	}
+	authMessage := fmt.Sprintf("sky-relay-auth-v1\n%s\n%s\n%s", number, r.Method, r.URL.Path)
 
-	if !ed25519.Verify(ed25519.PublicKey(publicKeyBytes), []byte(number), signBytes) {
+	if !ed25519.Verify(ed25519.PublicKey(publicKeyBytes), []byte(authMessage), signBytes) {
 		return fmt.Errorf("invalid signature!")
 	}
 
@@ -225,7 +229,7 @@ func handleGetPackets(w http.ResponseWriter, r *http.Request) {
 	numb := r.Header.Get("X-Number")
 	sign := r.Header.Get("X-Signature")
 
-	if err := authorize(accountID, publicKey, numb, sign); err != nil {
+	if err := authorize(accountID, publicKey, numb, sign, r); err != nil {
 		log.Println("auth is failed: ", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

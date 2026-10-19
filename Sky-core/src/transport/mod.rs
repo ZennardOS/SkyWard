@@ -3,6 +3,9 @@ use crate::cover;
 use crate::identity::{self, Account};
 use crate::messages;
 use anyhow::{Result, anyhow};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use ed25519_dalek::Signer;
+use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -14,6 +17,11 @@ pub struct TransportPacket {
     pub receiver_account_id: String,
     pub packet_type: String,
     pub payload: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct VeResponse {
+    number: String
 }
 
 pub fn encode_transport_packet(packet: &TransportPacket) -> Result<String> {
@@ -86,6 +94,19 @@ pub async fn transporting_packet(
     }
 }
 
+fn sign_relay_auth(account: &Account, number: &str, path: &str, method: &str) -> Result<String> {
+    let private_key_bytes = STANDARD.decode(&account.private_key)?;
+    let private_key_array: [u8; 32] = private_key_bytes.try_into().map_err(|_| anyhow!("invalid private key lenght!"))?;
+
+    let private_key = SigningKey::from_bytes(&private_key_array);
+
+    let auth_message = format!("sky-relay-auth-v1\n{}\n{}\n{}", number, method, path);
+    let signature = private_key.sign(auth_message.as_bytes());
+
+    Ok(STANDARD.encode(signature.to_bytes()))
+}
+
+
 pub async fn send_packet(packet: &TransportPacket) -> Result<()> {
     let client = reqwest::Client::new();
     let response = client
@@ -104,14 +125,23 @@ pub async fn send_packet(packet: &TransportPacket) -> Result<()> {
     Ok(())
 }
 
-pub async fn fetch_packet(account_id: &str) -> Result<Vec<TransportPacket>> {
+pub async fn fetch_packet(account: &Account) -> Result<Vec<TransportPacket>> {
     let client = reqwest::Client::new();
+
+    let number = get_number(&client, account).await?;
+    let sign = sign_relay_auth(account, &number, "/packets", "GET")?;
+
+
 
     let response: reqwest::Response = client
         .get("http://localhost:8080/packets")
-        .query(&[("account_id", account_id)])
+        .query(&[("account_id", account.account_id.as_str())])
+        .header("X-Public-Key", &account.public_key)
+        .header("X-Number", &number)
+        .header("X-Signature", &sign)
         .send()
         .await?;
+
 
     if !response.status().is_success() {
         return Err(anyhow!("relay returned status: {}", response.status()));
@@ -138,4 +168,16 @@ pub async fn ack_packet(account_id: &str, packet_id: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn get_number(client: &reqwest::Client, account: &Account) -> Result<String> {
+    let response = client.get("http://localhost:8080/auth/verification").query(&[("account_id", account.account_id.as_str())]).send().await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow!("failed status: {}", response.status()));
+    }
+
+    let response = response.json::<VeResponse>().await?;
+    Ok(response.number)
+
 }

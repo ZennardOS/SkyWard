@@ -262,7 +262,7 @@ async fn main() -> Result<()> {
             transport::transporting_packet(&pool, &account, &packet).await?;
         }
         "fetch" => {
-            let packets = transport::fetch_packet(&account.account_id).await?;
+            let packets = transport::fetch_packet(&account).await?;
 
             println!("packets received: {}", packets.len());
 
