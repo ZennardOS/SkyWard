@@ -196,7 +196,7 @@ async fn main() -> Result<()> {
             };
 
             // let packet_encoded = transport::encode_transport_packet(&packet)?;
-            transport::send_packet(&packet).await?;
+            transport::send_packet(&account, &packet).await?;
             println!("Packet was sended to Sky-relay!");
 
             println!("Packet_id: {}", packet.packet_id);
@@ -271,7 +271,7 @@ async fn main() -> Result<()> {
 
                 match transport::transporting_packet(&pool, &account, &packet).await {
                     Ok(()) => {
-                        transport::ack_packet(&account.account_id, &packet_id).await?;
+                        transport::ack_packet(&account, &packet_id).await?;
                         println!("ACK for packet: {}", packet_id);
                     }
 

@@ -16,7 +16,7 @@ import (
 
 type Auth struct {
 	AccountID string
-	Expires time.Time
+	Expires   time.Time
 }
 
 type TransportPacket struct {
@@ -30,7 +30,7 @@ type TransportPacket struct {
 var (
 	mutex   sync.Mutex
 	packets = make(map[string][]TransportPacket)
-	identy = make(map[string]Auth)
+	identy  = make(map[string]Auth)
 )
 
 func main() {
@@ -79,7 +79,7 @@ func HandlerAuth(w http.ResponseWriter, r *http.Request) {
 
 	identy[numb] = Auth{
 		AccountID: accountID,
-		Expires: time.Now().Add(30 * time.Second),
+		Expires:   time.Now().Add(30 * time.Second),
 	}
 
 	mutex.Unlock()
@@ -115,7 +115,7 @@ func authorize(accountID string, publicKey string, number string, signature stri
 	}
 
 	if auth.AccountID != accountID {
-		return  fmt.Errorf("Account id doesn't match!")
+		return fmt.Errorf("Account id doesn't match!")
 	}
 
 	publicKeyBytes, err := base64.StdEncoding.DecodeString(publicKey)
@@ -164,6 +164,18 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	publicKey := r.Header.Get("X-Public-Key")
+	number := r.Header.Get("X-Number")
+	sign := r.Header.Get("X-Signature")
+
+	if err := authorize(accountID, publicKey, number, sign, r); err != nil {
+		log.Println("DELETE auth failed: ", err)
+
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+		return
+	}
+
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -197,6 +209,19 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePostPacket(w http.ResponseWriter, r *http.Request) {
+	accountID := r.Header.Get("X-Account-ID")
+	publicKey := r.Header.Get("X-Public-Key")
+	numb := r.Header.Get("X-Number")
+	sign := r.Header.Get("X-Signature")
+
+	if err := authorize(accountID, publicKey, numb, sign, r); err != nil {
+		log.Println("POST auth failed: ", err)
+
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+		return
+	}
+
 	var packet TransportPacket
 
 	if err := json.NewDecoder(r.Body).Decode(&packet); err != nil {
