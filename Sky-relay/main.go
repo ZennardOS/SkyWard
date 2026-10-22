@@ -27,6 +27,11 @@ type TransportPacket struct {
 	Payload           string `json:"payload"`
 }
 
+const (
+	PacketSize        = 256 * 1024 // 256 KB
+	PacketsPerAccount = 1000
+)
+
 var (
 	mutex   sync.Mutex
 	packets = make(map[string][]TransportPacket)
@@ -202,7 +207,7 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 	if len(filtered) == 0 {
 		delete(packets, accountID)
 	} else {
-		packets[packetID] = filtered
+		packets[accountID] = filtered
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -222,10 +227,12 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, PacketSize)
+
 	var packet TransportPacket
 
 	if err := json.NewDecoder(r.Body).Decode(&packet); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		http.Error(w, "invalid json or too large packet", http.StatusBadRequest)
 		return
 	}
 
@@ -239,9 +246,18 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(packet.PacketID) > 64 || len(packet.ReceiverAccountID) > 128 || len(packet.PacketType) > 32 {
+		http.Error(w, "invalid packet field size", http.StatusBadRequest)
+		return
+	}
 	mutex.Lock()
+	queue := packets[packet.ReceiverAccountID]
+	if len(queue) >= PacketsPerAccount {
+		http.Error(w, "receiver queue is full", http.StatusTooManyRequests)
+		return
+	}
 
-	packets[packet.ReceiverAccountID] = append(packets[packet.ReceiverAccountID], packet)
+	packets[packet.ReceiverAccountID] = append(queue, packet)
 	mutex.Unlock()
 
 	w.WriteHeader(http.StatusCreated)
