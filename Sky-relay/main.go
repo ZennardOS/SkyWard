@@ -8,11 +8,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 )
+
+type RateLimiter struct {
+	Count int
+	Reset time.Time
+}
 
 type Auth struct {
 	AccountID string
@@ -30,14 +36,57 @@ type TransportPacket struct {
 const (
 	PacketSize        = 256 * 1024 // 256 KB
 	PacketsPerAccount = 1000
-	MaxNumbers = 10000
+	MaxNumbers        = 10000
 )
 
 var (
-	mutex   sync.Mutex
-	packets = make(map[string][]TransportPacket)
-	identy  = make(map[string]Auth)
+	mutex       sync.Mutex
+	rateMutex   sync.Mutex
+	packets     = make(map[string][]TransportPacket)
+	identy      = make(map[string]Auth)
+	packetIndex = make(map[string]TransportPacket)
+	PostRate    = make(map[string]RateLimiter)
+	GetRate     = make(map[string]RateLimiter)
+	DelRate     = make(map[string]RateLimiter)
+	NumbRate    = make(map[string]RateLimiter)
 )
+
+func AllowRequest(store map[string]RateLimiter, key string, limit int, window time.Duration) bool {
+	rateMutex.Lock()
+	defer rateMutex.Unlock()
+
+	now := time.Now()
+
+	rater, exists := store[key]
+
+	if !exists || now.After(rater.Reset) {
+		store[key] = RateLimiter{
+			Count: 1,
+			Reset: now.Add(window),
+		}
+
+		return true
+	}
+
+	if rater.Count >= limit {
+		return false
+	}
+
+	rater.Count++
+	store[key] = rater
+
+	return true
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+
+	if err != nil {
+		return r.RemoteAddr
+	}
+
+	return host
+}
 
 func main() {
 	http.HandleFunc("/packets", packetsHandler)
@@ -64,6 +113,13 @@ func packetsHandler(w http.ResponseWriter, r *http.Request) {
 func HandlerAuth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ip := clientIP(r)
+
+	if !AllowRequest(NumbRate, ip, 120, time.Minute) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
 
@@ -200,6 +256,12 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !AllowRequest(DelRate, accountID, 60, time.Minute) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+
+		return
+	}
+
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -223,6 +285,8 @@ func packetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	delete(packetIndex, packetID)
+
 	if len(filtered) == 0 {
 		delete(packets, accountID)
 	} else {
@@ -242,6 +306,12 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 		log.Println("POST auth failed: ", err)
 
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+
+		return
+	}
+
+	if !AllowRequest(PostRate, accountID, 60, time.Minute) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
 
 		return
 	}
@@ -270,14 +340,26 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mutex.Lock()
+	defer mutex.Unlock()
+	if existing, exists := packetIndex[packet.PacketID]; exists {
+		if existing == packet {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		http.Error(w, "packet_id already exists!", http.StatusConflict)
+		return
+	}
+
 	queue := packets[packet.ReceiverAccountID]
+
 	if len(queue) >= PacketsPerAccount {
 		http.Error(w, "receiver queue is full", http.StatusTooManyRequests)
 		return
 	}
 
 	packets[packet.ReceiverAccountID] = append(queue, packet)
-	mutex.Unlock()
+	packetIndex[packet.PacketID] = packet
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -297,6 +379,12 @@ func handleGetPackets(w http.ResponseWriter, r *http.Request) {
 	if err := authorize(accountID, publicKey, numb, sign, r); err != nil {
 		log.Println("auth is failed: ", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if !AllowRequest(GetRate, accountID, 60, time.Minute) {
+		http.Error(w, "too many requests", http.StatusTooManyRequests)
+
 		return
 	}
 
