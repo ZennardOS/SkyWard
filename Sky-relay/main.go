@@ -30,6 +30,7 @@ type TransportPacket struct {
 const (
 	PacketSize        = 256 * 1024 // 256 KB
 	PacketsPerAccount = 1000
+	MaxNumbers = 10000
 )
 
 var (
@@ -81,6 +82,21 @@ func HandlerAuth(w http.ResponseWriter, r *http.Request) {
 
 	numb := base64.StdEncoding.EncodeToString(randomBytes)
 	mutex.Lock()
+
+	now := time.Now()
+	for number, auth := range identy {
+		if now.After(auth.Expires) {
+			delete(identy, number)
+		}
+	}
+
+	if len(identy) > MaxNumbers {
+		mutex.Unlock()
+
+		http.Error(w, "Too large active numbers", http.StatusTooManyRequests)
+
+		return
+	}
 
 	identy[numb] = Auth{
 		AccountID: accountID,
@@ -143,6 +159,9 @@ func authorize(accountID string, publicKey string, number string, signature stri
 	signBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("invalid signature: %w", err)
+	}
+	if len(signBytes) != ed25519.SignatureSize {
+		return fmt.Errorf("invalid signature size!")
 	}
 
 	authMessage := fmt.Sprintf("sky-relay-auth-v1\n%s\n%s\n%s", number, r.Method, r.URL.Path)
@@ -265,6 +284,11 @@ func handlePostPacket(w http.ResponseWriter, r *http.Request) {
 
 func handleGetPackets(w http.ResponseWriter, r *http.Request) {
 	accountID := r.URL.Query().Get("account_id")
+
+	if accountID == "" {
+		http.Error(w, "account_id is required!", http.StatusBadRequest)
+		return
+	}
 
 	publicKey := r.Header.Get("X-Public-Key")
 	numb := r.Header.Get("X-Number")
